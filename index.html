@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<head>
+		  <link rel="canonical" href="http://www.diegoolano.com/us_per_capita_covid/">
+		  <meta property="og:locale" content="en_US">
+		  <meta property="og:type" content="article">
+		  <meta property="og:title" content="Explore COVID at the county level in the US">
+		  <meta property="og:description" content="explore, filter NYTIMEs collected data relating to COVID 19">
+		  <meta property="og:url" content="http://www.diegoolano.com/us_per_capita_covid/">
+		  <meta property="og:site_name" content="Diego Garcia-Olano">
+		  <meta property="article:author" content="https://www.facebook.com/diegoolano">
+		  <meta property="article:section" content="Films">
+		  <meta property="article:published_time" content="20206-04-05T23:42:22+00:00">
+		  <meta property="article:modified_time" content="2020-04-05T23:49:04+00:00">
+		  <meta property="og:updated_time" content="2020-04-04T23:49:04+00:00">
+		  <meta property="og:image" content="http://www.diegoolano.com/us_per_capita_covid/thumb.png">
+		  <meta property="og:image:width" content="2862">
+		  <meta property="og:image:height" content="1584">
+		  <meta name="twitter:card" content="summary">
+		  <meta name="twitter:description" content=""explore, filter NYTIMEs collected data relating to COVID 19>
+		  <meta name="twitter:title" content="Explore COVID at the county level in the US">
+		  <meta name="twitter:image" content="http://www.diegoolano.com/us_per_capita_covid/thumb.png">
+		  <meta name="twitter:creator" content="@dgolano">
+		  
+		  <meta charset="utf-8">
+		  <link rel="stylesheet" href="assets/change.css" type="text/css">
+		  <svg width="960" height="600"></svg>
+		  <script src="https://d3js.org/d3.v4.min.js"></script>
+		  <script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
+		  <script src="https://d3js.org/topojson.v2.min.js"></script>
+		  <script src="assets/jquery-3.1.1.min.js"></script>
+</head>
+<script>
+
+
+function getURLParameter(name) { return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))|| 0; }
+
+var svg = d3.select("svg"), width = +svg.attr("width"), height = +svg.attr("height");
+var cases_per_cap = d3.map();
+var deaths_per_cap = d3.map();
+var path = d3.geoPath();
+
+var g = svg.append("g") .attr("class", "key") .attr("transform", "translate(-100,20)");
+
+var tooltip = d3.select("body")
+    .append("div")
+    .attr("class","tt")
+    .style("padding","10px")
+    .style("margin","10px")
+    .style("position", "fixed")
+    .style("z-index", "10")
+    .style("background","white")
+    .style("border","2px dashed red")
+    .style("visibility", "hidden");
+
+var info = d3.select("body")
+    .append("div")
+    .attr("class","info")
+    .style("padding","10px")
+    .style("margin","10px")
+    .style("position", "absolute")
+    .style("right","1%")
+    .style("top","-20px")
+    .style("z-index", "-10")
+    .html("<span id='query'></span><br>by county for COVID 19<br>(as of 4/5/2020)<br><div id='url_params'></div><div id='resultlist'></div>");
+
+var info = d3.select("body")
+    .append("div")
+    .attr("class","links")
+    .html("SHOW: <select id='querysel'></select><br>FILTER BY STATE: <select id='countrysel'></select> <br>FILTER BY POPULATION: <select id='popsel'></select><br>covid data from <a href='https://www.nytimes.com/interactive/2020/us/coronavirus-us-cases.html'>The New York Times</a>.<br>Population estimates from <a href='https://www2.census.gov/programs-surveys/popest/datasets/2010-2019/counties/totals/'>2019 US Census</a><br>\"per capita\" means rate per 100,000 people")
+
+//GET URL params and UPDATE TEXT
+var query = getURLParameter("query")
+if(query == 0){ query = "Cases Per Capita" }
+jQuery("#query").html(query);
+
+var state = getURLParameter("state");
+if(state == 0){ state = "All States"; }
+
+var thresh = getURLParameter("thresh");
+if(thresh == 0){ thresh = "All Population Sizes"; }
+
+jQuery("#url_params").html("<br>Listing for "+state+" <span style='text-transform: lowercase; color:white;'>and</span> "+thresh);
+
+
+//QUERY DROP DOWN
+selectout = "";
+querys = ["Cases Per Capita", "Deaths Per Capita", "Cases", "Deaths", "Population"]
+for( i=0; i < querys.length; i++){
+		  c = querys[i];
+		  if(c == query){ s = "selected"; }else{ s = ""; }
+		  selectout += "<option value='" + c +"' "+s+">"+c+"</option>";
+}
+d3.select("#querysel").html(selectout);
+d3.select("#querysel").on("change",function(f){ 
+		  query_selected = jQuery("#querysel option:selected")[0].textContent; //.replace(/\(.*\)/,"").trim();
+		  window.location.href = "http://diegoolano.com/us_per_capita_covid/?state="+state+"&query="+query_selected+"&thresh="+thresh;
+});
+
+//STATES DROP DOWN
+var us_states = ['All States', 'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware', 'District of Columbia', 'Florida', 'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota', 'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire', 'New Jersey', 'New Mexico', 'New York', 'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island', 'South Carolina', 'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming'];
+
+selectout = "";
+for( i=0; i <= 51; i++){
+		  c = us_states[i];
+		  if(c == state){ s = "selected"; }else{ s = ""; }
+		  selectout += "<option value='" + c +"' "+s+">"+c+"</option>";
+}
+d3.select("#countrysel").html(selectout);
+d3.select("#countrysel").on("change",function(f){ 
+		  state_selected = jQuery("#countrysel option:selected")[0].textContent; //.replace(/\(.*\)/,"").trim();
+		  window.location.href = "http://diegoolano.com/us_per_capita_covid/?state="+state_selected+"&query="+query+"&thresh="+thresh;
+});
+
+//POPULATION DROPDOWN
+//POSSIBLE TODO make Less than vals
+pselectout = "";
+ps = {"All Population Sizes": 1, "Greater than 1 million": 1000000, "Greater than 500k": 500000, "Greater than 250k": 250000, "Greater than 100k": 100000, "Greater than 50k": 50000};
+
+for( i=0; i < Object.keys(ps).length; i++){
+		  c = Object.keys(ps)[i];
+		  if(c == thresh){ s = "selected"; }else{ s = ""; }
+		  pselectout += "<option value='" + c +"' "+s+">"+c+"</option>";
+}
+d3.select("#popsel").html(pselectout);
+d3.select("#popsel").on("change",function(f){ 
+		  pop_selected = jQuery("#popsel option:selected")[0].textContent; //.replace(/\(.*\)/,"").trim();
+		  window.location.href = "http://diegoolano.com/us_per_capita_covid/?state="+state+"&query="+query+"&thresh="+pop_selected;
+});
+
+threshv = ps[thresh]; 
+
+changejson = {};
+var querymap = {"Population" : "pop2019", "Cases" : "cases", "Deaths": "deaths", "Cases Per Capita":"cases_per_cap", "Deaths Per Capita": "deaths_per_cap"};
+var qkey = querymap[query];
+
+//LOAD DATA
+d3.queue()
+    .defer(d3.json, "https://d3js.org/us-10m.v1.json")
+    .defer(d3.csv, "data/covid0404countydata.csv?asdsdf", function(d) { 
+		d.id = d.fips;
+		changejson[d.id] = d; 
+		cases_per_cap.set(d.id, d[qkey]);   //was d.cases_per_cap 
+    })
+    .await(ready);
+
+
+var maxval = 0;
+var maxiter = 0;
+
+function populate_resultlist(){
+   ordered_municips = {};
+   Object.keys(changejson).forEach(function(ent){
+        ordered_municips[ent] = Math.round(parseFloat(changejson[ent][qkey]));
+   });
+
+   var tuples = [];
+   for (var key in ordered_municips) tuples.push([key, ordered_municips[key]]);
+
+   tuples.sort(function(a, b) {
+        a = a[1];
+        b = b[1];
+        return a < b ? 1 : (a > b ? -1 : 0);
+   });
+
+   out ="<ol>";
+	if( state == "All States"){
+			  for (var i = 0; i < 500; i++) {
+					 key = tuples[i][0];
+					 val = tuples[i][1];
+
+					 county = changejson[key].County;
+					 st = changejson[key].state;
+					 pop = parseInt(changejson[key].pop2019);
+					 
+					 if( threshv < pop){
+								out += "<li class='fips"+key+"'>"+county+","+st+"| pop: "+pop+"| "+val+"</li>";
+								if(maxiter < 10){ 
+										  maxval = val; 
+										  maxiter += 1;
+								}
+					 }
+			  }
+	}
+	else{
+	        tot = Object.keys(changejson).length;
+			  for (var i = 0; i < tot; i++) {
+					 key = tuples[i][0];
+					 val = tuples[i][1];
+					 county = changejson[key].County;
+					 st = changejson[key].state;
+					 pop = parseInt(changejson[key].pop2019);
+					 if( st == state && threshv < pop){
+								out += "<li class='fips"+key+"'>"+county+","+st+"| pop: "+pop+"| "+val+"</li>";
+								if(maxiter < 10){ maxval = val; maxiter += 1;}
+					 }
+			  }
+   }
+
+   jQuery("#resultlist").html(out +"</ol>");   
+	
+   d3.selectAll("#resultlist li")
+			  .on("mouseover", function(d){ 
+						 i = "path."+ this.attributes.class.value;
+						 d3.select(i).classed("selected",true);	
+						 id = i.split(".fips")[1];
+						 return show_popup(id);
+			  })
+				  .on("mousemove", function(){
+					 return tooltip.style("top", "80%").style("left","35%");
+				  })
+			  .on("mouseout", function(d){
+						 i = "path."+ this.attributes.class.value;
+						 d3.select(i).classed("selected",false);	
+						 return tooltip.style("visibility", "hidden");
+			  });
+
+}
+
+function show_popup(id){
+	 i = "path.fips"+id;
+	 d3.select(i).classed("selected",true); 
+	 if( Object.keys(changejson).indexOf(id) > -1 ){
+		cur = changejson[id];
+		t = "County: "+cur.County+"<br>";
+		t += "State: "+cur.state+"<br>";
+		t += "Population:" + Math.round(cur.pop2019) ;
+		t += "<br>Cases & Deaths: " + parseInt(cur.cases) + " & " + parseInt(cur.deaths);
+		t += "<br>Cases per 100k: " + Math.round(cur.cases_per_cap) ;
+		t += "<br>Deaths per 100k: " + Math.round(cur.deaths_per_cap);
+	 }
+	 else{ t = "none found"; }
+ tooltip.html(t);
+ return tooltip.style("visibility", "visible");     
+}
+
+var x = d3.scaleLinear() .domain([1,10]) .rangeRound([600, 860]);                      //used for sizing gradient bar only
+var color = d3.scaleThreshold() .domain(d3.range(2,10)) .range(d3.schemeReds[9]);
+var vs = [];
+
+// LOAD CSVS
+function ready(error, us) {
+  if (error) throw error;
+  
+  //Populate result list
+  populate_resultlist();
+
+
+  //TODO: MAKE COLOR CUTOFFS BASED ON DECILES OF DATA ( not just splitting max / 9 )  ... for now hack solution is to just use 10th largest val as max
+  //handle colors
+  if(query == "Cases Per Capita" && state == "All States" && thresh == "All Population Sizes"){
+        // https://www.d3indepth.com/scales/
+		  ddd = d3.scaleLog().domain([1, 50, 100, 200, 300, 400, 500, 600, 700, 800]).range([1,2,3,4,5,6,7,8,9,10])
+  }
+  else{
+		 //do deciles based on max of qkey
+		 v = Math.round(maxval / 9);
+		 for(i=0; i<10; i++){ vs[i] = 1+(i*v); }
+       ddd = d3.scaleLog().domain(vs).range([1,2,3,4,5,6,7,8,9,10])
+  }
+			 
+  svg.append("g")
+      .attr("class", "counties")
+    .selectAll("path")
+    .data(topojson.feature(us, us.objects.counties).features)
+    .enter().append("path")
+      .attr("class",function(d){ return "fips" + d.id; })
+      .attr("fill", function(d) { 
+					 //change to all allow this to be changeable
+				  findbin = cases_per_cap.get(d.id) 
+				  
+		        curstate = changejson[d.id].state;
+				  if(state != "All States" && curstate != state){ thisc = "white"; }
+				  else{
+				       if(state == "All States" && threshv != 1){
+									pop = parseInt(changejson[d.id].pop2019);
+									if(pop > threshv){
+											  v = ddd(findbin);
+											  thisc = color(v);
+									}
+						         else{
+										  thisc = "white"; 
+						              // thisc = "rgb(255, 245, 240)"; 
+									}
+					    }
+					    else{
+								if(threshv != 1){
+                           pop = parseInt(changejson[d.id].pop2019);
+                           if(pop > threshv){
+                                   v = ddd(findbin);
+                                   thisc = color(v);
+                           }
+                           else{
+                                thisc = "white"; 
+                           }
+								}
+								else{
+                                   v = ddd(findbin);
+                                   thisc = color(v);
+								}
+						 }
+		        }
+				  return thisc; 
+	})
+      .attr("d", path)
+      .on("mouseover", function(d){ 
+		  return show_popup(d.id);
+      })
+      .on("mousemove", function(){
+        return tooltip.style("top", (d3.event.pageY-10)+"px").style("left",(d3.event.pageX+10)+"px");
+      })
+      .on("mouseout", function(){
+		  d3.select(this).classed("selected",false); 
+		  return tooltip.style("visibility", "hidden");
+      });
+
+  svg.append("path")
+      .datum(topojson.mesh(us, us.objects.states, function(a, b) { return a !== b; }))
+      .attr("class", "states")
+      .attr("d", path);
+}
+
+//GRADIENT BAR
+g.selectAll("rect")
+  .data(color.range().map(function(d) {
+      d = color.invertExtent(d);
+      if (d[0] == null) d[0] = x.domain()[0];
+      if (d[1] == null) d[1] = x.domain()[1];
+      return d;
+    }))
+  .enter().append("rect") .attr("height", 8) 
+  .attr("x", function(d) { return x(d[0]); }) 
+  .attr("width", function(d) { return x(d[1]) - x(d[0]); }) 
+  .attr("fill", function(d) { return color(d[0]); });
+
+g.append("text") .attr("class", "caption") .attr("x", x.range()[0]) .attr("y", -6) .attr("fill", "#000") .attr("text-anchor", "start") .attr("font-weight", "bold") .text("low to high");
+
+g.call(d3.axisBottom(x)
+    .tickSize(13)
+    .tickFormat(function(x, i) { })
+    .tickValues(color.domain()))
+  .select(".domain")
+    .remove();
+
+
+</script>
+
+
+<script> 
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){ 
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o), 
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m) 
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga'); 
+ 
+  ga('create', 'UA-85920004-1', 'auto'); 
+  ga('send', 'pageview'); 
+ 
+</script> 
