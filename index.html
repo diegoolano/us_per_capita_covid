@@ -61,7 +61,7 @@ var info = d3.select("body")
     .style("right","1%")
     .style("top","-20px")
     .style("z-index", "-10")
-    .html("<span id='query'></span><br>by county for COVID 19<br>(as of 4/5/2020)<br><div id='url_params'></div><div id='resultlist'></div>");
+    .html("<span id='query'></span><br>by county for COVID 19<br>(as of 4/10/2020)<br><div id='url_params'></div><div id='resultlist'></div>");
 
 var info = d3.select("body")
     .append("div")
@@ -136,7 +136,7 @@ var qkey = querymap[query];
 //LOAD DATA
 d3.queue()
     .defer(d3.json, "https://d3js.org/us-10m.v1.json")
-    .defer(d3.csv, "data/covid0404countydata.csv?asdsdf", function(d) { 
+    .defer(d3.csv, "data/covid0410countydata.csv?asdsdf", function(d) { 
 		d.id = d.fips;
 		changejson[d.id] = d; 
 		cases_per_cap.set(d.id, d[qkey]);   //was d.cases_per_cap 
